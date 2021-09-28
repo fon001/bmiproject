@@ -1,8 +1,8 @@
-name: BMI_CI                                        # "BMI_CI" workflow
+name: BMI_CI                                       
 
 env:
-  AZURE_WEBAPP_NAME: mybmichecker            # set this to your application's name
-  AZURE_WEBAPP_PACKAGE_PATH: '.'              # set this to the path to your web app project
+  AZURE_WEBAPP_NAME: mybmichecker            
+  AZURE_WEBAPP_PACKAGE_PATH: '.'              
 
 
 on:
@@ -10,41 +10,35 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
-#on:
- #workflow_dispatch:        
-# push:                                             #  workflow_dispatch for manually triggered
-#   branches: [ main ]
- 
+
 
 jobs:
-  build:                                            # "build" job
-    runs-on: windows-latest                         # runner
+  build:                                          
+    runs-on: windows-latest                         
+
     steps:
     - uses: actions/checkout@v2
-    - name: Setup .NET Core SDK
-      uses: actions/setup-dotnet@v1.7.2
+    - name: Setup .NET Core
+      uses: actions/setup-dotnet@v1
       with:
-        dotnet-version: '5.0.x'
-    - name: Build for Release
-      run: dotnet build --configuration Release
-    - name: Run unit tests
-      run: dotnet test bmiUnitTestProject/bmiUnitTestProject.csproj --no-restore --collect "Code coverage" -l:trx
-   
-    - name: Publish Unit Test Results
-      uses: dorny/test-reporter@v1
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Install dependencies
+      run: dotnet restore
+      
+    - name: Build
+      run: |
+        cd DotNet.WebApp
+        dotnet build --configuration Release --no-restore
+        dotnet publish -c Release -o ../dotnet-webapp -r linux-x64 --self-contained true /p:UseAppHost=true
+    - name: Test
+      run: |
+        cd DotNet.WebApp.Tests
+        dotnet test --no-restore --verbosity normal
+      
+    - uses: azure/webapps-deploy@v2
+      name: Deploy
       with:
-        artifact: ''
-        name: MS Tests                  
-        path: '**.trx'
-        reporter: 'dotnet-trx'                     
-
-    - name: Publish
-      run: dotnet publish -c Release -o '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/myapp' 
-
-# Deploy to Azure Web apps
-    - name: Run Azure webapp deploy action using publish profile credentials
-      uses: azure/webapps-deploy@v2
-      with: 
-        app-name: ${{ env.AZURE_WEBAPP_NAME }}                        # your app name
-        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE  }} # Define secret variable in repository settings as per action documentation
-        package: '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/myapp'
+        app-name: ${{ env.AZURE_WEBAPP_NAME }}
+        publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}
+        package: '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/dotnet-webapp'
